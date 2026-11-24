@@ -1,0 +1,1246 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>森林單島小鎮多人測驗</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&display=swap">
+<style>
+  /* 版面概念：一整個畫面就是一座浮在水上的小鎮模型，介面像貼在模型上的標籤 */
+  :root {
+    --water: #bfe6ee;  /* 背景與水的淡藍色 */
+  }
+  /* 整頁鋪滿、不捲動 */
+  html, body { height: 100%; margin: 0; overflow: hidden; background: var(--water); color-scheme: light; }
+  /* 3D 畫布與介面畫布都固定鋪滿 */
+  canvas { position: fixed; inset: 0; display: block; }
+  /* p5.js 介面畫布在最上層，接收點擊與觸控 */
+  #hud canvas { z-index: 2; touch-action: none; }
+
+  /* ===== 測驗介面 ===== */
+  .ui { position: fixed; z-index: 5; font-family: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; color: #26262c; }
+  #top { left: 16px; top: 16px; background: rgba(255,255,255,.94); border-radius: 16px; padding: 12px 16px; box-shadow: 0 6px 18px rgba(38,38,44,.12); }
+  #top h1 { font-size: 19px; font-weight: 900; margin: 0 0 2px; }
+  #top small { color: #6b6b75; font-size: 13px; }
+  #dots { display: flex; gap: 6px; margin-top: 8px; }
+  #dots span { width: 24px; height: 24px; border-radius: 50%; background: #e4e0d8; color: #9a958b; font: 700 12px/24px sans-serif; text-align: center; }
+  #dots span.ok { background: #5fae6e; color: #fff; }
+  #dots span.bad { background: #d9483b; color: #fff; }
+  #helpBtn { right: 16px; top: 16px; height: 42px; border: 0; border-radius: 999px; background: #f2c230; color: #26262c; font-weight: 900; font-size: 15px; padding: 10px 18px; cursor: pointer; box-shadow: 0 4px 0 #c99b17, 0 8px 18px rgba(38,38,44,.15); }
+  #helpBtn:active { transform: translateY(3px); box-shadow: 0 1px 0 #c99b17; }
+  #near { left: 50%; bottom: 16px; transform: translateX(-50%); width: min(520px, calc(100vw - 32px)); background: #fff; border-radius: 18px; padding: 14px 18px; box-shadow: 0 10px 30px rgba(38,38,44,.18); display: none; border-top: 6px solid #f2c230; }
+  #near .who { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  #near .av, .hcard .av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 900; flex: none; }
+  #near b { font-size: 17px; } #near em, .hcard em { font-style: normal; font-size: 12px; color: #fff; background: #26262c; border-radius: 999px; padding: 2px 9px; }
+  #near ul, .hcard ul { margin: 4px 0 0; padding-left: 20px; font-size: 14px; line-height: 1.65; color: #44444c; }
+  #tipline { left: 50%; bottom: 14px; transform: translateX(-50%); font-size: 13px; color: rgba(38,38,44,.7); white-space: nowrap; pointer-events: none; }
+  .mask { position: fixed; inset: 0; z-index: 9; background: rgba(38,38,44,.45); display: none; align-items: center; justify-content: center; padding: 16px; }
+  .mask.on { display: flex; }
+  .card { background: #fff; border-radius: 22px; width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 22px 24px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+  .card .tag { display: inline-block; background: #e8743b; color: #fff; border-radius: 999px; padding: 3px 12px; font-size: 13px; font-weight: 700; }
+  .card h2 { font-size: 20px; line-height: 1.5; margin: 10px 0 14px; }
+  .opt { display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left; border: 2px solid #ebe6dc; background: #faf8f4; border-radius: 14px; padding: 11px 14px; margin-bottom: 9px; font: 500 15px/1.5 inherit; font-family: inherit; color: #26262c; cursor: pointer; }
+  .opt:hover { border-color: #e8743b; }
+  .opt i { font-style: normal; flex: none; width: 24px; height: 24px; border-radius: 50%; background: #26262c; color: #fff; font-size: 13px; display: grid; place-items: center; margin-top: 1px; }
+  .opt.ok { border-color: #5fae6e; background: #eef8f0; } .opt.ok i { background: #5fae6e; }
+  .opt.bad { border-color: #d9483b; background: #fdf0ee; } .opt.bad i { background: #d9483b; }
+  .opt:disabled { cursor: default; }
+  .fb { border-radius: 14px; padding: 12px 14px; font-size: 14px; line-height: 1.65; margin-top: 6px; display: none; }
+  .fb.ok { display: block; background: #eef8f0; } .fb.bad { display: block; background: #fff6e0; }
+  .btn { margin-top: 14px; border: 0; border-radius: 12px; background: #26262c; color: #fff; font: 700 15px inherit; font-family: inherit; padding: 11px 20px; cursor: pointer; }
+  .btn.alt { background: #f1eee8; color: #26262c; margin-left: 8px; }
+  .hcard { display: flex; gap: 12px; border: 2px solid #f1eee8; border-radius: 16px; padding: 12px 14px; margin-bottom: 10px; }
+  .hcard .go { margin-left: auto; align-self: center; flex: none; border: 0; border-radius: 10px; background: #f2c230; font: 700 13px inherit; font-family: inherit; padding: 8px 12px; cursor: pointer; }
+  .hcard b { font-size: 16px; } .hcard small { color: #7b7b86; display: block; font-size: 12px; }
+  .row { display: flex; justify-content: space-between; border-bottom: 1px solid #f1eee8; padding: 8px 0; font-size: 14px; }
+  .big { font-size: 44px; font-weight: 900; color: #e8743b; margin: 4px 0; }
+  .keys { font-size: 13px; color: #6b6b75; line-height: 1.9; background: #f7f5f0; border-radius: 12px; padding: 10px 14px; margin-top: 10px; }
+  #board { right: 16px; top: 70px; width: 260px; background: rgba(255,255,255,.95); border-radius: 16px; box-shadow: 0 6px 18px rgba(38,38,44,.12); overflow: hidden; }
+  #board header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; font-weight: 900; font-size: 15px; cursor: pointer; background: #26262c; color: #fff; }
+  #board header span { margin-left: auto; font-size: 12px; font-weight: 500; color: #f2c230; }
+  #boardList { max-height: 46vh; overflow: auto; padding: 6px 10px 10px; font-size: 13px; }
+  #board.min #boardList, #board.min #boardFoot { display: none; }
+  .br { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px solid #f1eee8; }
+  .br.me { background: #fff6e0; border-radius: 8px; }
+  .br .rk { width: 22px; font-weight: 900; color: #7b7b86; text-align: center; }
+  .br .rk.g { color: #e8743b; }
+  .br .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+  .br .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .br .sc { font-size: 12px; color: #55555e; white-space: nowrap; }
+  #boardFoot { padding: 0 12px 10px; font-size: 12px; color: #7b7b86; }
+  #resetBtn { border: 0; border-radius: 8px; background: #f1eee8; padding: 6px 10px; font: 700 12px inherit; font-family: inherit; cursor: pointer; margin-top: 6px; }
+  #resetBtn.warn { background: #d9483b; color: #fff; }
+  .looks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 4px; }
+  .lk { border: 2px solid #ebe6dc; border-radius: 14px; background: #faf8f4; padding: 10px 6px; cursor: pointer; font: 700 13px inherit; font-family: inherit; color: #26262c; }
+  .lk i { display: block; width: 30px; height: 30px; border-radius: 50%; margin: 0 auto 6px; border: 4px solid #fff; box-shadow: 0 0 0 2px #ebe6dc; }
+  .lk.on { border-color: #e8743b; background: #fff4ee; }
+  #mpNote { font-size: 13px; color: #7b7b86; margin-top: 8px; line-height: 1.6; }
+  #toast { left: 50%; top: 84px; transform: translateX(-50%); background: #26262c; color: #fff; padding: 10px 18px; border-radius: 12px; font-size: 14px; display: none; }
+  @media (max-width: 800px) { #board { width: 210px; } #board:not(.open) #boardList, #board:not(.open) #boardFoot { display: none; } }
+  #nick { width: 100%; height: 44px; border: 2px solid #ebe6dc; border-radius: 12px; padding: 0 14px; font: 500 16px inherit; font-family: inherit; }
+  #nick:focus { outline: none; border-color: #e8743b; }
+  #chat { left: 16px; bottom: 16px; width: min(340px, calc(100vw - 32px)); background: rgba(255,255,255,.95); border-radius: 16px; box-shadow: 0 6px 18px rgba(38,38,44,.14); display: none; flex-direction: column; overflow: hidden; }
+  #chat.on { display: flex; }
+  #chat header { padding: 8px 12px; font-weight: 900; font-size: 14px; background: #26262c; color: #fff; cursor: pointer; display: flex; gap: 8px; align-items: center; }
+  #chat header span { margin-left: auto; font-size: 12px; font-weight: 500; color: #f2c230; }
+  #chatLog { height: 170px; overflow-y: auto; padding: 8px 12px; font-size: 13px; line-height: 1.55; }
+  #chat.min #chatLog { display: none; }
+  .cm { margin-bottom: 3px; word-break: break-word; }
+  .cm b { margin-right: 4px; }
+  .cm.sys { color: #7b7b86; font-size: 12px; }
+  .cm.me b { color: #e8743b; }
+  #chatForm { display: flex; gap: 6px; padding: 8px; border-top: 1px solid #f1eee8; }
+  #chatIn { flex: 1; min-width: 0; height: 36px; border: 2px solid #ebe6dc; border-radius: 10px; padding: 0 10px; font: 500 14px inherit; font-family: inherit; }
+  #chatIn:focus { outline: none; border-color: #e8743b; }
+  #chatSend { border: 0; border-radius: 10px; background: #e8743b; color: #fff; font: 700 14px inherit; font-family: inherit; padding: 0 14px; cursor: pointer; }
+  #near { left: auto; right: 16px; transform: none; width: min(420px, calc(100vw - 32px)); }
+  #tipline { display: none; }
+  @media (max-width: 760px) { #chatLog { height: 90px; } #near { bottom: 190px; } }
+  @media (max-width: 600px) { #tipline { display: none; } #top h1 { font-size: 16px; } }
+</style>
+
+<!-- p5.js：介面、鍵盤、滑鼠 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<!-- 告訴瀏覽器 three 模組的位置 -->
+<script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+
+
+<div id="hud"></div>
+<div class="ui" id="top"><h1>森林單島小鎮測驗</h1><small id="stat">答題 0 / 6　第一次就答對 0 題</small><br><small id="timer" style="color:#e8743b;font-weight:700"></small><div id="dots"></div></div>
+<button class="ui" id="helpBtn">💡 HELP 提示角色</button>
+<div class="ui" id="near"></div>
+<div class="ui" id="board"><header id="boardHead">🏆 排行榜 <span id="online">連線中…</span></header>
+  <div id="boardList">還沒有人加入</div>
+  <div id="boardFoot">房間：<b id="roomName">—</b>・依「六題全對」的先後排名<br><button id="resetBtn" style="display:none">🔄 開新一局（清空排行榜）</button></div></div>
+<div class="ui" id="toast"></div>
+<div class="ui" id="chat"><header id="chatHead">💬 聊天室 <span id="chatHint">Enter 開始打字</span></header>
+  <div id="chatLog"></div>
+  <form id="chatForm" autocomplete="off"><input id="chatIn" maxlength="80" placeholder="說點什麼…（Enter 送出）"><button id="chatSend" type="submit">送出</button><button id="waveBtn" type="button" title="揮手（G 鍵）" style="border:0;border-radius:10px;background:#f2c230;padding:0 10px;cursor:pointer;font-size:16px">👋</button></form></div>
+<div class="ui" id="tipline">走進橘色圓圈就會出題　靠近頭上有「?」的人可以拿提示　H：提示角色　拖曳旋轉　滾輪縮放</div>
+<div class="mask ui" id="mQuiz"><div class="card" id="quizCard"></div></div>
+<div class="mask ui" id="mHelp"><div class="card" id="helpCard"></div></div>
+<div class="mask ui on" id="mIntro"><div class="card">
+  <span class="tag">多人連線｜AI 指令改作品複習</span>
+  <h2>輸入暱稱、選一個角色，加入森林單島小鎮！</h2>
+  <input id="nick" maxlength="12" placeholder="你的暱稱（例如：座號 + 名字）">
+  <div class="looks" id="looks"></div>
+  <div style="font-size:14px;line-height:1.8;margin-top:8px">
+  🟠 走進<b>橘色圓圈</b>答題（綠＝答對、紅＝去找提示再回來）<br>
+  💡 頭上有<b>黃色「?」</b>的是<b>提示角色</b>，靠近就會說重點；右上 <b>HELP</b> 可以請他們帶路<br>
+  🏆 <b>最先六題全部答對</b>的人排第一名，其他同學會即時出現在島上</div>
+  <div class="keys">方向鍵 / WASD 移動　點地面走過去　左鍵拖曳旋轉　滾輪或 + − 縮放　選項可按 1～4</div>
+  <div id="mpNote">正在連線到伺服器…</div>
+  <button class="btn" id="startBtn">加入遊戲</button></div></div>
+<div class="mask ui" id="mEnd"><div class="card" id="endCard"></div></div>
+
+<script type="module">
+// =====================================================================
+// 島嶼小鎮漫遊
+// three.js：用基本幾何形狀（方塊、圓柱、球）拼出低多邊形小鎮與公仔
+// p5.js   ：讀鍵盤與滑鼠、畫標籤與集章介面
+// =====================================================================
+import * as THREE from 'three';                                  // 匯入 three.js
+
+// ---------------- 調色盤（整座小鎮只用這幾個顏色） ----------------
+const C = {
+  sky: 0xbfe6ee,      // 背景
+  water: 0x8fd3e0,    // 水面
+  side: 0xb9ae9d,     // 平台側面
+  dark: 0x4b4b55,     // 橋面、輪胎、燈柱
+  orange: 0xe8743b,   // 重點色：巴士、屋頂、標記
+  yellow: 0xf2c230,   // 欄杆、安全帽
+  white: 0xf7f4ee,    // 白線、柵欄
+  trunk: 0x8b6a4e,    // 樹幹
+  leaves: [0x9cc77a, 0x86b86a, 0xb3d68f], // 三種樹葉綠
+};
+const hex = n => '#' + n.toString(16).padStart(6, '0');        // 數字顏色轉成 CSS 色碼
+
+// ---------------- three.js 基本設定 ----------------
+const renderer = new THREE.WebGLRenderer({ antialias: true });   // 建立繪圖器
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));           // 最多 2 倍解析度
+renderer.setSize(innerWidth, innerHeight);                      // 鋪滿視窗
+renderer.shadowMap.enabled = true;                               // 開啟陰影
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;                // 柔和陰影
+document.body.appendChild(renderer.domElement);                  // 放進網頁
+
+const scene = new THREE.Scene();                                 // 建立場景
+scene.background = new THREE.Color(C.sky);                       // 背景色
+
+// 正交攝影機：沒有近大遠小，看起來像桌上的模型
+let viewSize = 26;                                               // 畫面上下可以看到幾個單位
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
+const CAM_DIST = 52;                                             // 攝影機離目標的距離
+const YAW0 = Math.PI / 4, PITCH0 = Math.atan(1 / Math.SQRT2);    // 預設：右上方 45°、俯角約 35°
+let camYaw = YAW0, camPitch = PITCH0;                            // 目前的水平角度、俯角
+let yawTarget = YAW0, pitchTarget = PITCH0;                      // 想要轉到的角度（平滑靠近）
+let zoomTarget = 26;                                             // 想要縮放到的大小
+const PITCH_MIN = 20 * Math.PI / 180, PITCH_MAX = 70 * Math.PI / 180; // 俯角範圍 20°～70°
+function fitCamera() {                                           // 依視窗比例調整可視範圍
+  const a = innerWidth / innerHeight;                            // 長寬比
+  const v = Math.max(viewSize, viewSize * 0.75 / a);             // 手機直立時拉遠一點，左右才看得到東西
+  camera.left = -v * a / 2; camera.right = v * a / 2;            // 左右範圍
+  camera.top = v / 2; camera.bottom = -v / 2;                    // 上下範圍
+  camera.updateProjectionMatrix();                               // 套用設定
+}
+fitCamera();                                                     // 先設定一次
+
+// ---------------- 燈光 ----------------
+scene.add(new THREE.HemisphereLight(0xffffff, 0x9fbfa0, 1.5));   // 天空光
+const sun = new THREE.DirectionalLight(0xfff2dd, 1.7);           // 太陽光（微暖）
+sun.castShadow = true;                                           // 產生陰影
+sun.shadow.mapSize.set(2048, 2048);                              // 陰影解析度
+Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 100 }); // 陰影範圍
+sun.shadow.bias = -0.0005;                                       // 避免陰影條紋
+scene.add(sun, sun.target);                                      // 太陽與它照射的目標都要加入
+
+// ---------------- 小工具 ----------------
+const matCache = {};                                             // 材質快取，同顏色共用一個材質
+const mat = (color) => matCache[color] ??= new THREE.MeshLambertMaterial({ color, flatShading: true });
+// 建立一個方塊並放到指定位置
+function box(w, h, d, color, x, y, z, parent = scene) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color)); // 方塊
+  m.position.set(x, y, z);                                       // 位置
+  m.castShadow = m.receiveShadow = true;                         // 陰影
+  parent.add(m);                                                 // 加入父層
+  return m;                                                      // 回傳以便再調整
+}
+// 建立一個圓柱
+function cyl(rt, rb, h, color, x, y, z, parent = scene, seg = 8) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat(color)); // 圓柱
+  m.position.set(x, y, z);                                       // 位置
+  m.castShadow = m.receiveShadow = true;                         // 陰影
+  parent.add(m);                                                 // 加入
+  return m;
+}
+// 建立一顆球
+function ball(r, color, x, y, z, parent = scene, detail = 1) {
+  const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, detail), mat(color)); // 低多邊形球
+  m.position.set(x, y, z);                                       // 位置
+  m.castShadow = m.receiveShadow = true;                         // 陰影
+  parent.add(m);
+  return m;
+}
+// 用小畫布畫出花紋，再變成可重複的貼圖
+function canvasTex(draw, rx, ry) {
+  const c = document.createElement('canvas'); c.width = c.height = 128; // 128×128 畫布
+  draw(c.getContext('2d'));                                      // 呼叫繪圖函式
+  const t = new THREE.CanvasTexture(c);                          // 轉成貼圖
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;                      // 可重複
+  t.repeat.set(rx, ry);                                          // 重複次數
+  t.colorSpace = THREE.SRGBColorSpace;                           // 正確色彩
+  t.anisotropy = 4;                                              // 斜看時比較清楚
+  return t;
+}
+
+// ---------------- 可以走的範圍與障礙物 ----------------
+const walkRects = [];                                            // 可以走的長方形（平台、橋）
+const blockRects = [];                                           // 不能穿過的長方形（巴士、建築）
+const blockCircles = [];                                         // 不能穿過的圓形（樹、燈柱）
+function walkable(x, z) {                                        // 這個點在不在可走範圍內
+  return walkRects.some(r => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1);
+}
+function isFree(x, z, r = 0.35) {                                // 這個點能不能站
+  if (!walkable(x, z)) return false;                             // 掉到水裡不行
+  if (blockCircles.some(o => Math.hypot(o.x - x, o.z - z) < o.r + r)) return false; // 撞到圓形障礙
+  return !blockRects.some(b => x > b.x0 - r && x < b.x1 + r && z > b.z0 - r && z < b.z1 + r); // 撞到長方形障礙
+}
+
+// ---------------- 水面 ----------------
+const water = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshLambertMaterial({ color: C.water }));
+water.rotation.x = -Math.PI / 2;                                 // 躺平
+water.position.y = -1.1;                                         // 比平台低
+water.receiveShadow = true;                                      // 平台的影子落在水上
+scene.add(water);
+const ripples = [];                                              // 水面上漂動的白色波紋
+for (let i = 0; i < 40; i++) {
+  const r = box(1.5 + Math.random() * 2, 0.02, 0.12, 0xd8f1f5, (Math.random() - 0.5) * 90, -1.05, (Math.random() - 0.5) * 90);
+  r.castShadow = false;                                          // 波紋不需要陰影
+  r.userData.phase = Math.random() * 6;                          // 每條波紋的節奏不同
+  ripples.push(r);
+}
+
+// ---------------- 地面花紋 ----------------
+const TOPS = {
+  tile: (w, d) => canvasTex(g => {                               // 灰米色地磚
+    g.fillStyle = '#d9d2c5'; g.fillRect(0, 0, 128, 128);         // 底色
+    g.strokeStyle = '#c4bba9'; g.lineWidth = 4;                  // 磚縫
+    g.strokeRect(0, 0, 128, 128); g.strokeRect(0, 0, 64, 64); g.strokeRect(64, 64, 64, 64); // 2×2 塊
+  }, w / 2, d / 2),
+  grass: (w, d) => canvasTex(g => {                              // 草地
+    g.fillStyle = '#a8d58a'; g.fillRect(0, 0, 128, 128);         // 底色
+    g.fillStyle = '#97c779';                                     // 深一點的草點
+    for (let i = 0; i < 30; i++) g.fillRect(Math.random() * 128, Math.random() * 128, 4, 4);
+  }, w / 3, d / 3),
+  deck: (w, d) => canvasTex(g => {                               // 木棧道
+    g.fillStyle = '#d1ab82'; g.fillRect(0, 0, 128, 128);         // 木頭色
+    g.fillStyle = '#b8916a';                                     // 木板縫
+    for (let y = 0; y < 128; y += 32) g.fillRect(0, y, 128, 3);
+  }, w / 2, d / 2),
+  sand: (w, d) => canvasTex(g => {                               // 校園的淺色鋪面
+    g.fillStyle = '#ece3cf'; g.fillRect(0, 0, 128, 128);         // 底色
+    g.strokeStyle = '#ddd2b9'; g.lineWidth = 3; g.strokeRect(0, 0, 128, 128); // 淡淡格線
+  }, w / 3, d / 3),
+};
+// 黃黑相間的警示條
+const stripeTex = (len) => canvasTex(g => {
+  g.fillStyle = '#f2c230'; g.fillRect(0, 0, 128, 128);           // 黃色底
+  g.fillStyle = '#2f2f36';                                       // 黑色斜條
+  for (let x = -128; x < 256; x += 64) { g.beginPath(); g.moveTo(x, 128); g.lineTo(x + 32, 128); g.lineTo(x + 96, 0); g.lineTo(x + 64, 0); g.fill(); }
+}, len / 1.2, 1);
+
+// ---------------- 平台（浮在水上的區塊） ----------------
+const platforms = [
+  { no: '森', name: '森林單島', x: 0, z: 0, w: 50, d: 44, top: 'grass' },
+];
+platforms.forEach(p => {
+  box(p.w, 1.2, p.d, C.side, p.x, -0.6, p.z);                    // 平台的厚度
+  const top = new THREE.Mesh(new THREE.BoxGeometry(p.w, 0.06, p.d), new THREE.MeshLambertMaterial({ map: TOPS[p.top](p.w, p.d) }));
+  top.position.set(p.x, 0.03, p.z);                              // 鋪在平台上面
+  top.receiveShadow = true;                                      // 接收陰影
+  scene.add(top);
+  const sm = new THREE.MeshLambertMaterial({ map: stripeTex(p.w) }); // 前側警示條
+  const s1 = new THREE.Mesh(new THREE.BoxGeometry(p.w, 0.35, 0.03), sm);
+  s1.position.set(p.x, -0.3, p.z + p.d / 2 + 0.02); scene.add(s1); // 貼在 +z 那一面
+  const s2 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.35, p.d), new THREE.MeshLambertMaterial({ map: stripeTex(p.d) }));
+  s2.position.set(p.x + p.w / 2 + 0.02, -0.3, p.z); scene.add(s2); // 貼在 +x 那一面
+  walkRects.push({ x0: p.x - p.w / 2 + 0.4, x1: p.x + p.w / 2 - 0.4, z0: p.z - p.d / 2 + 0.4, z1: p.z + p.d / 2 - 0.4 }); // 可走範圍
+});
+
+// ---------------- 橋 ----------------
+function bridge(cx, cz, len, alongX) {
+  const g = new THREE.Group();                                   // 整座橋是一個群組
+  g.position.set(cx, 0, cz);                                     // 橋的中心
+  if (!alongX) g.rotation.y = Math.PI / 2;                       // 南北向的橋要轉 90 度
+  box(len, 0.2, 2.2, C.dark, 0, -0.02, 0, g);                    // 橋面
+  for (let i = -len / 2 + 0.25; i < len / 2; i += 0.5) box(0.08, 0.01, 2.2, 0x63636e, i, 0.085, 0, g); // 木板縫
+  for (const s of [-1, 1]) {                                     // 左右兩側欄杆
+    box(len, 0.1, 0.1, C.yellow, 0, 0.9, s * 1.05, g);           // 扶手
+    for (let i = -len / 2 + 0.3; i <= len / 2 - 0.2; i += 1.1) box(0.1, 0.9, 0.1, C.yellow, i, 0.45, s * 1.05, g); // 欄杆柱
+    cyl(0.15, 0.15, 1.2, C.side, 0, -0.7, s * 0.9, g);           // 橋墩
+  }
+  scene.add(g);
+  walkRects.push(alongX                                          // 橋面可以走
+    ? { x0: cx - len / 2, x1: cx + len / 2, z0: cz - 0.85, z1: cz + 0.85 }
+    : { x0: cx - 0.85, x1: cx + 0.85, z0: cz - len / 2, z1: cz + len / 2 });
+}
+// ---------------- 道具 ----------------
+function tree(x, z, s = 1) {                                     // 圓球狀的低多邊形樹
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s); // 位置與大小
+  cyl(0.14, 0.2, 1.2, C.trunk, 0, 0.6, 0, g, 6);                 // 樹幹
+  const pick = () => C.leaves[Math.floor(Math.random() * 3)];    // 隨機挑一種綠
+  ball(0.8, pick(), 0, 1.7, 0, g);                               // 主樹冠
+  ball(0.55, pick(), 0.45, 1.45, 0.25, g);                       // 旁邊小樹冠
+  ball(0.5, pick(), -0.35, 1.55, -0.3, g);                       // 另一邊小樹冠
+  g.rotation.y = Math.random() * 6;                              // 每棵樹轉個方向
+  scene.add(g);
+  blockCircles.push({ x, z, r: 0.35 * s });                      // 樹幹擋路
+}
+function sakura(x, z, s = 1) {                                   // 櫻花樹：粉紅色樹冠
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s);
+  cyl(0.13, 0.2, 1.3, 0x7a5646, 0, 0.65, 0, g, 6);               // 深一點的樹幹
+  const pinks = [0xf6b8cb, 0xf29bb5, 0xfad3df];                  // 三種粉紅
+  const pick = () => pinks[Math.floor(Math.random() * 3)];
+  ball(0.82, pick(), 0, 1.8, 0, g); ball(0.58, pick(), 0.5, 1.5, 0.2, g); ball(0.52, pick(), -0.4, 1.6, -0.3, g);
+  g.rotation.y = Math.random() * 6; scene.add(g);
+  blockCircles.push({ x, z, r: 0.35 * s });                      // 樹幹一樣擋路
+}
+function pine(x, z, s = 1) {                                     // 松樹：三層圓錐
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s);
+  cyl(0.12, 0.16, 0.8, C.trunk, 0, 0.4, 0, g, 6);                // 樹幹
+  [[0.95, 1.0, 1.05], [0.75, 0.9, 1.65], [0.5, 0.8, 2.2]].forEach(([r, h, y], i) =>
+    cyl(0.02, r, h, [0x5f9a5a, 0x6fae66, 0x82bf74][i], 0, y, 0, g, 7)); // 由下往上越來越小
+  scene.add(g);
+  blockCircles.push({ x, z, r: 0.35 * s });
+}
+function bush(x, z, color) {                                     // 小花叢
+  ball(0.35, C.leaves[0], x, 0.25, z, scene, 0);                 // 綠色底
+  ball(0.12, color, x + 0.15, 0.55, z + 0.1, scene, 0);          // 花
+  ball(0.1, color, x - 0.15, 0.5, z - 0.05, scene, 0);           // 花
+}
+function bench(x, z, rotY = 0) {                                 // 長椅
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rotY;
+  box(1.6, 0.1, 0.5, 0xb07d52, 0, 0.45, 0, g);                   // 椅面
+  box(1.6, 0.4, 0.08, 0xb07d52, 0, 0.75, -0.22, g);              // 椅背
+  for (const s of [-0.65, 0.65]) box(0.08, 0.45, 0.45, C.dark, s, 0.22, 0, g); // 椅腳
+  scene.add(g);
+}
+const lampHeads = [];                                            // 路燈燈頭（晚上會亮可以延伸）
+function lamp(x, z) {                                            // 路燈
+  cyl(0.06, 0.08, 2.4, C.dark, x, 1.2, z, scene, 6);             // 燈柱
+  lampHeads.push(box(0.35, 0.2, 0.35, 0xfff1b8, x, 2.45, z));    // 燈頭
+  blockCircles.push({ x, z, r: 0.15 });                          // 燈柱擋路
+}
+function cone(x, z) {                                            // 三角錐
+  cyl(0.02, 0.22, 0.6, C.orange, x, 0.3, z, scene, 8);           // 錐身
+  cyl(0.13, 0.15, 0.08, C.white, x, 0.33, z, scene, 8);          // 白色反光條
+}
+function bike(color) {                                           // 腳踏車（回傳群組，方便給騎士用）
+  const g = new THREE.Group();
+  for (const s of [-0.55, 0.55]) {                               // 前後輪
+    const w = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.05, 6, 16), mat(C.dark)); // 輪胎
+    w.position.set(0, 0.36, s); w.rotation.y = Math.PI / 2; w.castShadow = true; g.add(w);
+  }
+  box(0.06, 0.06, 1.1, color, 0, 0.62, 0, g);                    // 車架橫桿
+  box(0.06, 0.45, 0.06, color, 0, 0.6, -0.15, g);                // 座管
+  box(0.2, 0.06, 0.3, 0x333333, 0, 0.84, -0.15, g);              // 座墊
+  box(0.5, 0.05, 0.05, C.dark, 0, 0.95, 0.5, g);                 // 把手
+  box(0.05, 0.4, 0.05, color, 0, 0.75, 0.5, g);                  // 前叉
+  return g;
+}
+function bus(x, z) {                                             // 巴士
+  const g = new THREE.Group(); g.position.set(x, 0, z);
+  box(5, 1.9, 2.1, C.orange, 0, 1.25, 0, g);                     // 車身
+  box(5.05, 0.2, 2.15, C.white, 0, 2.25, 0, g);                  // 車頂白邊
+  for (let i = -1.8; i <= 1.8; i += 0.9) box(0.7, 0.6, 2.15, 0x9fd1e0, i, 1.55, 0, g); // 車窗
+  box(0.05, 0.7, 1.6, 0x9fd1e0, 2.5, 1.5, 0, g);                 // 擋風玻璃
+  for (const wx of [-1.6, 1.6]) for (const wz of [-1, 1]) {      // 四個輪子
+    const w = cyl(0.42, 0.42, 0.3, C.dark, wx, 0.42, wz, g, 12); w.rotation.x = Math.PI / 2;
+  }
+  scene.add(g);
+  blockRects.push({ x0: x - 2.5, x1: x + 2.5, z0: z - 1.05, z1: z + 1.05 }); // 巴士擋路
+}
+
+// ---- 交通區 ----
+bus(-2.5, -4.6);                                                 // 停在站牌旁的巴士
+const shelter = new THREE.Group(); shelter.position.set(-2.5, 0, -2.4); // 候車亭
+box(3, 0.12, 1.2, C.orange, 0, 2.2, 0, shelter);                 // 亭頂
+for (const s of [-1.3, 1.3]) box(0.1, 2.2, 0.1, C.dark, s, 1.1, -0.4, shelter); // 柱子
+box(2.6, 1.2, 0.05, 0xcfe8ee, 0, 1.2, -0.45, shelter);           // 透明背板
+scene.add(shelter);
+for (let i = 0; i < 6; i++) box(0.5, 0.02, 2.4, C.white, -5 + i * 0.85, 0.07, 4.2); // 斑馬線
+for (let i = 0; i < 4; i++) { const b = bike(C.orange); b.position.set(3.4 + i * 0.75, 0.05, -3.2); scene.add(b); } // 共享單車
+box(3.4, 0.12, 0.12, C.dark, 4.5, 0.6, -4.1);                    // 停車架
+blockRects.push({ x0: 3, x1: 6.2, z0: -4.2, z1: -2.5 });         // 單車區擋路
+lamp(-7.2, 0.5); lamp(7.2, 0.5); lamp(-7.2, -6.4);               // 路燈
+cone(-6, 2.6); cone(-6.6, 3.2); cone(1, 2.6);                    // 三角錐
+tree(-6.6, 6.2); tree(7, -6.3, 0.9); tree(6.8, 6.1, 1.1);        // 樹
+bench(4.5, 3.6, Math.PI);                                        // 長椅
+
+// ---- 公園區 ----
+const court = box(8, 0.05, 5, 0x4f7a55, -21, 0.07, 1);           // 球場
+court.castShadow = false;
+box(8, 0.02, 0.08, C.white, -21, 0.11, -1.4); box(8, 0.02, 0.08, C.white, -21, 0.11, 3.4); // 邊線
+box(0.08, 0.02, 4.9, C.white, -21, 0.11, 1);                     // 中線
+const ring = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.04, 4, 32), mat(C.white)); // 中圈
+ring.rotation.x = Math.PI / 2; ring.position.set(-21, 0.11, 1); scene.add(ring);
+for (const gx of [-25, -17]) {                                   // 兩邊球門
+  box(0.08, 1, 0.08, C.white, gx, 0.5, 0); box(0.08, 1, 0.08, C.white, gx, 0.5, 2); box(0.08, 0.08, 2, C.white, gx, 1, 1);
+}
+[[-26.5, -4.5], [-26.6, 6.6], [-15.6, -4.6], [-23.5, -4.9], [-18.2, 6.9], [-26.8, 1.5], [-15.5, 7]].forEach(([x, z]) => sakura(x, z, 0.85 + Math.random() * 0.4)); // 公園：櫻花樹
+bench(-21, 6.4, Math.PI); bench(-21, -4.6);                      // 長椅
+[[-24.5, 6.8, 0xf28fad], [-17, -5, 0xf2c230], [-27, -1.8, 0xf28fad], [-15.4, 3.5, 0xffffff]].forEach(([x, z, c]) => bush(x, z, c)); // 花叢
+
+// ---- 學校區 ----
+const school = new THREE.Group(); school.position.set(1, 0, -21.6); // 校舍
+box(9, 3.4, 3, 0xf1e6cf, 0, 1.7, 0, school);                     // 牆
+box(9.6, 0.4, 3.6, C.orange, 0, 3.6, 0, school);                 // 屋頂
+for (let i = -3.5; i <= 3.5; i += 1.4) { box(0.8, 0.7, 0.05, 0x9fd1e0, i, 2.5, 1.52, school); box(0.8, 0.7, 0.05, 0x9fd1e0, i, 1.2, 1.52, school); } // 兩層窗戶
+box(1.4, 1.6, 0.06, 0x8b6a4e, 0, 0.8, 1.53, school);             // 大門
+box(3, 0.6, 0.1, C.white, 0, 3.05, 1.55, school);                // 校名牌
+scene.add(school);
+blockRects.push({ x0: -3.5, x1: 5.5, z0: -23.1, z1: -20.1 });    // 校舍擋路
+cyl(0.05, 0.05, 4, C.white, -5, 2, -18.5, scene, 6);             // 旗桿
+blockCircles.push({ x: -5, z: -18.5, r: 0.15 });
+const flag = box(1.1, 0.7, 0.03, C.orange, -4.45, 3.6, -18.5);   // 旗子（會飄）
+tree(7.6, -22.8); tree(-5.6, -23); tree(7.8, -15.5, 0.85);       // 樹
+for (let i = 0; i < 5; i++) box(0.12, 0.6, 0.12, C.white, -1.2 + i * 0.6, 0.3, -16); // 校門柵欄（左右各留通道）
+bush(-6, -15.2, 0xf2c230); bush(8, -19, 0xf28fad);               // 花叢
+
+// ---- 水岸區 ----
+for (let z = -9.5; z <= 5.5; z += 1) box(0.1, 0.8, 0.1, C.white, 25.7, 0.4, z); // 臨水欄杆柱
+box(0.08, 0.08, 15.2, C.white, 25.7, 0.8, -2);                   // 臨水扶手
+bench(24.4, -5, -Math.PI / 2); bench(24.4, 0, -Math.PI / 2);     // 面向水的長椅
+lamp(24.8, -7.5); lamp(24.8, 3);                                 // 路燈
+pine(15.6, -8.6, 1.1); pine(15.8, 4.8, 1.25); pine(18.5, -9, 0.85); pine(17.2, 5.4, 0.8); // 水岸：松樹
+const boats = [];                                                // 小船（會隨波搖晃）
+[[31, -4, 0], [28, 10, 1.2], [-31, -8, 2.2]].forEach(([x, z, r]) => {
+  const g = new THREE.Group(); g.position.set(x, -1, z); g.rotation.y = r;
+  box(3, 0.6, 1.3, C.white, 0, 0.1, 0, g);                       // 船身
+  box(3.05, 0.15, 1.35, C.orange, 0, -0.15, 0, g);               // 船底色帶
+  box(1, 0.7, 0.9, 0x9fd1e0, -0.3, 0.75, 0, g);                  // 船艙
+  scene.add(g); boats.push(g);
+});
+
+// ---- 市場區 ----
+const awningTex = canvasTex(g => {                               // 紅白條紋遮雨棚
+  for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#ffffff' : '#d9483b'; g.fillRect(i * 16, 0, 16, 128); }
+}, 1, 1);
+function stall(x, z, goods) {                                    // 攤位
+  const g = new THREE.Group(); g.position.set(x, 0, z);
+  box(1.8, 0.8, 0.9, 0xb07d52, 0, 0.4, 0, g);                    // 桌子
+  for (const sx of [-0.85, 0.85]) for (const sz of [-0.4, 0.4]) box(0.07, 2, 0.07, C.dark, sx, 1, sz, g); // 四根柱子
+  const aw = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.08, 1.3), new THREE.MeshLambertMaterial({ map: awningTex }));
+  aw.position.set(0, 2.05, 0.1); aw.rotation.x = 0.18; aw.castShadow = true; g.add(aw); // 斜斜的遮雨棚
+  for (let i = 0; i < 5; i++) ball(0.13, goods[i % goods.length], -0.6 + i * 0.3, 0.92, 0.15, g, 0); // 水果
+  scene.add(g);
+  blockRects.push({ x0: x - 0.95, x1: x + 0.95, z0: z - 0.5, z1: z + 0.5 });
+}
+function house(x, z, wall, roof) {                               // 三角形屋頂的小房子
+  const g = new THREE.Group(); g.position.set(x, 0, z);
+  box(2.6, 2, 2.2, wall, 0, 1, 0, g);                            // 牆
+  const rg = new THREE.CylinderGeometry(1.5, 1.5, 3, 3); rg.rotateY(Math.PI / 2); rg.rotateZ(Math.PI / 2); // 三角柱橫躺、尖端朝上
+  const r = new THREE.Mesh(rg, mat(roof)); r.scale.set(1, 0.6, 1); r.position.y = 2.45; r.castShadow = true; g.add(r);
+  box(0.6, 1, 0.05, 0x8b6a4e, 0.5, 0.5, 1.11, g);                // 門
+  box(0.6, 0.5, 0.05, 0x9fd1e0, -0.6, 1.2, 1.11, g);             // 窗
+  scene.add(g);
+  blockRects.push({ x0: x - 1.3, x1: x + 1.3, z0: z - 1.1, z1: z + 1.1 });
+}
+house(-4.6, 21.4, 0xf6e7c8, 0xd9483b); house(-1.4, 21.6, 0xdcecf0, C.orange); // 兩棟小房子
+stall(0.4, 19, [0xd9483b, 0xf2c230]);
+stall(3.2, 19, [0x86b86a, 0xf29bb5]);
+stall(6.0, 19, [0xf2a33a, 0xd9483b]);
+sakura(-6, 15.4, 0.8); lamp(6.3, 14.6);                         // 角落的櫻花樹和路燈
+
+// ---- 單一島嶼的森林帶：保留中央道路與場地，四周種多一點樹 ----
+[
+  [-22,-17,1.0],[-17,-18,0.9],[-11,-20,1.1],[-7,-19,0.8],[8,-20,1.0],[13,-18,1.1],[18,-17,0.9],[22,-14,1.0],
+  [-23,-11,0.9],[-20,-8,1.1],[-23,-3,1.0],[-21,3,0.9],[-23,9,1.1],[-21,14,0.9],[-18,18,1.0],
+  [-12,18,0.9],[-7,20,1.1],[-2,18,0.8],[8,18,1.0],[14,19,0.9],[20,17,1.1],[22,12,0.9],
+  [23,7,1.0],[22,2,1.1],[23,-3,0.9],[21,-8,1.0],[19,-12,0.9],[15,-14,1.1],
+  [-14,-14,0.8],[-10,-12,0.9],[11,-12,0.8],[13,-9,1.0],[-15,12,0.9],[15,12,0.8],[17,8,1.0],[-16,-5,0.8]
+].forEach(([x,z,s]) => tree(x,z,s));
+
+// 松樹叢讓島嶼邊緣更像森林，仍保留中央可走道路
+[
+  [-20,-16],[ -9,-16],[ 2,-16],[13,-16],[21,-10],
+  [-21,10],[-12,14],[-3,16],[9,15],[20,10]
+].forEach(([x,z],i) => pine(x,z,0.75 + (i % 2) * 0.2));
+
+// ---------------- 公仔角色 ----------------
+// 用球和膠囊拼成大頭小身體的公仔：頭身比約 1:1.5
+function makeChibi({ skin = 0xf3cba5, shirt = 0x5b8def, pants = 0x4a5370, hair = 0x3b2a20, helmet = null, bag = null, ponytail = null, glasses = false } = {}) {
+  const g = new THREE.Group();                                   // 整個公仔
+  const limb = (r, len, color, x, y) => {                        // 做一隻可擺動的手或腳
+    const pivot = new THREE.Group(); pivot.position.set(x, y, 0); // 關節（轉動的中心）
+    const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 3, 8), mat(color)); // 膠囊形手腳
+    m.position.y = -len / 2 - r * 0.5; m.castShadow = true;      // 往下掛在關節上
+    pivot.add(m); g.add(pivot);
+    return pivot;
+  };
+  const legL = limb(0.11, 0.3, pants, -0.13, 0.5);               // 左腳
+  const legR = limb(0.11, 0.3, pants, 0.13, 0.5);                // 右腳
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.27, 0.3, 4, 10), mat(shirt)); // 身體
+  body.position.y = 0.8; body.castShadow = true; g.add(body);
+  const armL = limb(0.08, 0.28, shirt, -0.36, 1.0);              // 左手
+  const armR = limb(0.08, 0.28, shirt, 0.36, 1.0);               // 右手
+  const head = new THREE.Group(); head.position.y = 1.45; g.add(head); // 頭部群組
+  const face = new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 12), mat(skin)); // 臉
+  face.castShadow = true; head.add(face);
+  for (const s of [-0.13, 0.13]) {                               // 兩顆眼睛
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), mat(0x2b2b30));
+    eye.position.set(s, 0.02, 0.35); head.add(eye);
+  }
+  if (helmet) {                                                  // 戴安全帽
+    const hm = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(helmet));
+    hm.position.y = 0.04; hm.castShadow = true; head.add(hm);
+    const brim = box(0.5, 0.05, 0.2, helmet, 0, 0.06, 0.4, head); // 帽緣
+  } else {                                                       // 一般頭髮
+    const hr = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2.2), mat(hair));
+    hr.position.set(0, 0.03, -0.03); hr.rotation.x = -0.25; hr.castShadow = true; head.add(hr);
+  }
+  if (bag) box(0.4, 0.45, 0.2, bag, 0, 0.85, -0.3, g);           // 背包
+  let tail = null;
+  if (ponytail) {                                                // 馬尾：掛在後腦的小關節，走路會甩
+    tail = new THREE.Group(); tail.position.set(0, 0.05, -0.36); head.add(tail);
+    ball(0.13, ponytail, 0, 0, -0.06, tail);                     // 綁頭髮的地方
+    ball(0.15, ponytail, 0, -0.2, -0.12, tail);                  // 馬尾
+    ball(0.1, ponytail, 0, -0.38, -0.12, tail);                  // 髮尾
+    box(0.2, 0.06, 0.06, 0xd9483b, 0, 0.02, -0.02, tail);        // 髮圈
+  }
+  if (glasses) for (const s of [-0.13, 0.13]) {                  // 眼鏡：兩個細圓框
+    const r = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.018, 4, 12), mat(0x2b2b30));
+    r.position.set(s, 0.02, 0.37); head.add(r);
+  }
+  g.userData = { legL, legR, armL, armR, body, head, tail, phase: Math.random() * 6 }; // 記住關節，動畫要用
+  scene.add(g);
+  return g;
+}
+// 走路動畫：手腳前後擺、身體上下起伏
+function animateWalk(ch, amount, dt) {
+  const u = ch.userData;                                         // 取出關節
+  u.phase += dt * 10 * amount;                                   // 走得越快擺得越快
+  const sw = Math.sin(u.phase) * 0.7 * amount;                   // 擺動角度
+  u.legL.rotation.x = sw; u.legR.rotation.x = -sw;               // 雙腳交替
+  u.armL.rotation.x = -sw; u.armR.rotation.x = sw;               // 雙手和腳相反
+  const bob = Math.abs(Math.sin(u.phase)) * 0.06 * amount;       // 上下起伏
+  u.body.position.y = 0.8 + bob; u.head.position.y = 1.45 + bob; // 身體和頭一起動
+  if (u.tail) u.tail.rotation.z = Math.sin(u.phase) * 0.35 * amount; // 馬尾左右甩
+}
+// 讓公仔面向移動方向（公仔正面朝 +z）
+const faceTo = (ch, dx, dz) => { ch.rotation.y = Math.atan2(dx, dz); };
+
+// ---- 玩家 ----
+const player = makeChibi({ shirt: 0x5fae6e, pants: 0x2f3a5c, hair: 0x2b1d14, helmet: 0xd9483b, bag: C.yellow, ponytail: 0x2b1d14 }); // 綁馬尾的女生：綠上衣、紅安全帽、黃背包
+player.position.set(0, 0.06, 1);                                 // 起點
+const playerRing = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.62, 24), new THREE.MeshBasicMaterial({ color: C.orange, transparent: true, opacity: 0.8 }));
+playerRing.rotation.x = -Math.PI / 2; scene.add(playerRing);     // 腳下的橘色圓圈，讓玩家好找
+
+// ---- 小狗：跟在主角後面 ----
+function makeDog() {
+  const g = new THREE.Group();
+  const fur = 0xd9a066, dark = 0x8b5a33;
+  box(0.34, 0.3, 0.62, fur, 0, 0.48, 0, g);                      // 身體
+  const head = new THREE.Group(); head.position.set(0, 0.74, 0.36); g.add(head);
+  box(0.32, 0.3, 0.3, fur, 0, 0, 0, head);                       // 頭
+  box(0.16, 0.12, 0.14, 0xf0d2a8, 0, -0.06, 0.2, head);          // 嘴巴
+  box(0.07, 0.06, 0.05, 0x2b2b30, 0, -0.02, 0.28, head);         // 鼻子
+  for (const s of [-1, 1]) {
+    box(0.09, 0.16, 0.06, dark, s * 0.13, 0.17, -0.04, head);    // 耳朵
+    box(0.05, 0.05, 0.03, 0x2b2b30, s * 0.08, 0.05, 0.16, head); // 眼睛
+  }
+  const legs = [];
+  for (const [x, z] of [[-0.11, 0.2], [0.11, 0.2], [-0.11, -0.2], [0.11, -0.2]]) { // 四隻腳掛在關節上
+    const pv = new THREE.Group(); pv.position.set(x, 0.36, z); g.add(pv);
+    box(0.09, 0.32, 0.09, fur, 0, -0.16, 0, pv); legs.push(pv);
+  }
+  const tail = new THREE.Group(); tail.position.set(0, 0.58, -0.3); g.add(tail); // 尾巴關節
+  const tm = box(0.06, 0.06, 0.28, dark, 0, 0.08, -0.12, tail); tm.rotation.x = -0.6;
+  g.userData = { legs, tail, head, phase: 0 };
+  scene.add(g);
+  return g;
+}
+const dog = makeDog();
+dog.position.set(0, 0.06, 2.5);                                  // 一開始在主角後面
+
+// ---- 校門口的老師：一直揮手 ----
+const teacher = makeChibi({ shirt: 0xffffff, pants: 0x8a8a92, hair: 0x4a3a30, glasses: true }); // 白襯衫、灰褲子、眼鏡
+teacher.position.set(-2.3, 0.06, -16.7);                         // 站在校門口旁邊
+teacher.rotation.y = 0.4;                                        // 面向來的人
+blockCircles.push({ x: -2.3, z: -16.7, r: 0.35 });               // 老師也擋路
+
+// ---- 路人：沿著路線來回走 ----
+const walkers = [
+  { look: { shirt: 0x7ab07a, hair: 0x6b4a2b }, path: [[-24, -2.5], [-18, -2.5], [-18, 4.5], [-24, 4.5]], speed: 1.6 }, // 公園繞球場
+  { look: { shirt: 0xd9d9d9, hair: 0xdddddd, pants: 0x777777 }, path: [[23, -8], [23, 4]], speed: 0.9 },          // 水岸散步的長輩
+  { look: { shirt: 0xf2a6b8, helmet: C.yellow, bag: C.orange }, path: [[-1, -17.5], [5, -17.5]], speed: 1.4 },    // 校門口的學生
+  { look: { shirt: 0x5b8def, helmet: C.yellow, bag: 0x7ab07a }, path: [[-7, 8], [-7, -7], [7, -7], [7, 8]], speed: 1.2 },
+  { look: { shirt: 0xe8743b, hair: 0x4a3022, pants: 0x3f4a66 }, path: [[-12, 12], [12, 12], [12, 16], [-12, 16]], speed: 1.0 },
+  { look: { shirt: 0x8e6cc4, helmet: C.yellow, bag: 0xf29bb5 }, path: [[-16,-10],[-8,-10],[0,-12],[8,-10],[16,-10]], speed: 1.3 },
+].map(w => ({ ...w, ch: makeChibi(w.look), i: 0 }));
+walkers.forEach(w => w.ch.position.set(w.path[0][0], 0.06, w.path[0][1])); // 放到起點
+
+// ---- 騎腳踏車的人：在交通區繞圈 ----
+const cyclist = new THREE.Group(); scene.add(cyclist);           // 騎士 + 腳踏車
+const cycleBike = bike(0x5b8def); cyclist.add(cycleBike);        // 藍色腳踏車
+const rider = makeChibi({ shirt: 0x7ab07a, helmet: C.yellow });  // 戴黃色安全帽
+scene.remove(rider); cyclist.add(rider);                         // 改掛在腳踏車群組底下
+rider.position.set(0, 0.35, -0.15);                              // 坐在座墊上
+rider.userData.armL.rotation.x = rider.userData.armR.rotation.x = -1.1; // 雙手往前握把手
+const cyclePath = [[0, 1.4], [6.3, 1.4], [6.3, 5.6], [0, 5.6]];  // 繞圈路線
+let cycleIdx = 0;                                                // 目前要騎向第幾個點
+cyclist.position.set(cyclePath[0][0], 0.06, cyclePath[0][1]);    // 起點
+
+// ---------------- 集章點 ----------------
+const spots = [
+  { id: 1, name: '通學區',     x: -2.5, z: 6,    info: '過斑馬線前先停下來，左右看清楚再走。' },
+  { id: 2, name: '共享單車站', x: 4.6,  z: -1.6, info: '借車前檢查煞車和輪胎，騎完記得還車。' },
+  { id: 3, name: '公園球場',   x: -21,  z: 4.6,  info: '一起玩之前先說好規則，輪流上場。' },
+  { id: 4, name: '河濱步道',   x: 21,   z: 2,    info: '靠近水邊不跨欄杆，坐在長椅上看風景。' },
+  { id: 5, name: '校門口',     x: 1,    z: -17,  info: '早上跟警衛伯伯打聲招呼，準時進教室。' },
+  { id: 6, name: '市場攤位',   x: 3,    z: 16.2, info: '買東西要排隊，拿到東西記得說謝謝。' },
+];
+spots.forEach(s => {
+  const r = new THREE.Mesh(new THREE.RingGeometry(0.7, 0.95, 32), new THREE.MeshBasicMaterial({ color: C.orange, transparent: true, opacity: 0.9 }));
+  r.rotation.x = -Math.PI / 2; r.position.set(s.x, 0.09, s.z);   // 地上的圓圈
+  scene.add(r);
+  s.ring = r; s.done = false;                                    // 記住圓圈、還沒蓋章
+});
+
+// ---------------- 測驗：題目（第一個選項是正確答案，出題時會打亂） ----------------
+const QUIZ = {
+  1: { q: '用 VS Code 的 Live Server 開啟作品後，瀏覽器的網址開頭通常是什麼？',
+       opts: ['127.0.0.1:5500', 'file:///C:/Users/…/index.html', 'github.com/你的帳號', 'www.google.com'],
+       exp: 'Live Server 會在自己的電腦開一個小網站，網址是 127.0.0.1:5500，存檔後還會自動重新整理。' },
+  2: { q: '下面哪一個「不是」好指令的四個部分？',
+       opts: ['把程式碼一行一行寫給 AI', '附上完整的 index.html', '用看得到的樣子描述要改什麼', '說明哪些地方不要改'],
+       exp: '四個部分是：附上檔案、描述看得到的樣子、說明哪些不要改、要求回傳完整檔案。不需要自己寫程式。' },
+  3: { q: '存檔之後畫面變成一片白，最好的下一步是？',
+       opts: ['按 F12，把 Console 的紅字複製給 AI，並說「只修正這個錯誤」', '請 AI 把整個作品重寫一次', '重新安裝 VS Code', '關掉瀏覽器，明天再試'],
+       exp: '錯誤訊息是最好的線索。加上「只修正這個錯誤，其他都不要改」，AI 才不會順手改壞別的地方。' },
+  4: { q: '請 AI 把公園的樹換成櫻花樹時，加哪一句可以避免角色穿過新的樹？',
+       opts: ['樹幹一樣會擋路', '顏色用粉紅色', '大小隨機一點', '樹要漂亮一點'],
+       exp: '新加的東西要說清楚「會擋路」，改完再實際走一遍確認不會穿過去、也不會掉進水裡。' },
+  5: { q: '加上 Q / E 旋轉場景時，為什麼要寫「方向鍵要跟著目前的視角換算方向」？',
+       opts: ['場景轉過之後，按 → 角色仍然往畫面右邊走', '讓縮放變得比較平滑', '讓攝影機不會轉到地面底下', '讓滑鼠點一下就能走過去'],
+       exp: '場景轉了 90 度以後，如果方向鍵沒有跟著換算，按 → 角色就會往奇怪的方向走。' },
+  6: { q: '照影片的做法開啟 GitHub Pages 時，Branch 和資料夾要怎麼選？',
+       opts: ['main，/ (root)', 'None，/ (root)', 'main，/docs', 'gh-pages，/src'],
+       exp: 'Settings → Pages → Branch 選 main、資料夾選 / (root) → Save，等 1～2 分鐘就會出現網址。' },
+};
+// ---------------- 六位提示角色（站在各題附近） ----------------
+const HELPERS = [
+  { name: 'Live 小哥', role: 'Live Server 達人', q: 1, x: -4.4, z: 6.2, color: '#2f6fb0', look: { shirt: 0x2f6fb0, hair: 0x2b1d14, pants: 0x3f4a66 },
+    tips: ['用 VS Code「開啟資料夾」，再按右下角的 Go Live', '網址會是 127.0.0.1:5500，代表用網站的方式在自己電腦開啟', '存檔 Ctrl+S 會自動重新整理；沒變就按 Ctrl+F5'] },
+  { name: '指令姐姐', role: '提示詞教練', q: 2, x: 6.3, z: -0.9, color: '#c2577a', look: { shirt: 0xf29bb5, hair: 0x5a3a2a, pants: 0x4a5370, ponytail: 0x5a3a2a },
+    tips: ['好指令四部分：附上檔案、描述看得到的樣子、說明不要改、要完整檔案', '用顏色、髮型、動作來描述，不用自己寫程式', '最後加一句「其他都不要改」'] },
+  { name: '除錯博士', role: 'F12 偵探', q: 3, x: -18.6, z: 5.8, color: '#6b6b75', look: { shirt: 0xf4f4f4, hair: 0x9a9a9a, pants: 0x4b4b55, glasses: true },
+    tips: ['畫面一片白？先按 F12，打開 Console', '把紅色的錯誤訊息整段複製給 AI', '加一句「只修正這個錯誤，其他都不要改」', '改得太亂就回到備份檔'] },
+  { name: '造景阿伯', role: '場景設計師', q: 4, x: 19.2, z: 3.6, color: '#5f8f4f', look: { shirt: 0x7ab07a, hair: 0xdddddd, pants: 0x777777, helmet: 0xf2c230 },
+    tips: ['用區域名稱和方向說位置：「公園」、「交通區下方」', '新的樹、房子、攤位都要說「會擋路」', '改完一定要實際走一遍：過橋、碰撞、集章'] },
+  { name: '攝影機老師', role: '鏡頭專家', q: 5, teacher: true, color: '#26262c',
+    tips: ['功能多就編號，一條一條列出來', '說清楚範圍，例如俯角 20°～70°', '要寫「方向鍵跟著目前視角換算」和「點一下還是要走過去」'] },
+  { name: 'GitHub 店長', role: '上線顧問', q: 6, x: 5.6, z: 16.0, color: '#24292f', look: { shirt: 0x24292f, hair: 0x3b2a20, pants: 0x3f4a66, bag: 0x5fae6e },
+    tips: ['主頁檔名一定是 index.html', 'Settings → Pages → Branch 選 main、資料夾 / (root) → Save', '網址是「帳號.github.io/儲存庫名稱/」，更新就上傳同名檔案覆蓋'] },
+];
+HELPERS.forEach(h => {
+  if (h.teacher) { h.ch = teacher; h.x = teacher.position.x; h.z = teacher.position.z; return; } // 校門口的老師兼任
+  h.ch = makeChibi(h.look); h.ch.position.set(h.x, 0.06, h.z); h.ch.rotation.y = Math.random() * 6;
+  blockCircles.push({ x: h.x, z: h.z, r: 0.35 });                // 提示角色也會擋路
+});
+const stOf = id => spots.find(s => s.id === id);
+spots.forEach(s => { s.state = null; s.first = null; s.wasIn = false; }); // null 未答、'ok' 答對、'bad' 答錯待重答
+
+// ---------------- 測驗介面（HTML） ----------------
+const $ = id => document.getElementById(id);
+const UI = {
+  open: () => document.querySelector('.mask.on') !== null,        // 有對話框開著就暫停走路
+  cur: null,                                                      // 目前作答的題目
+  refresh() {
+    const answered = spots.filter(s => s.first !== null).length, firstOk = spots.filter(s => s.first === true).length;
+    $('stat').textContent = `答題 ${answered} / 6　第一次就答對 ${firstOk} 題`;
+    $('dots').innerHTML = spots.map(s => `<span class="${s.state || ''}">${s.state === 'ok' ? '✓' : s.state === 'bad' ? '✗' : s.id}</span>`).join('');
+    spots.forEach(s => s.ring.material.color.set(s.state === 'ok' ? 0x5fae6e : s.state === 'bad' ? 0xd9483b : C.orange));
+  },
+  quiz(s) {
+    const Q = QUIZ[s.id]; UI.cur = s;
+    const order = [0, 1, 2, 3].sort(() => Math.random() - 0.5);  // 打亂選項
+    $('quizCard').innerHTML = `<span class="tag">第 ${s.id} 題・${s.name}</span>${s.state === 'bad' ? ' <span class="tag" style="background:#d9483b">再試一次</span>' : ''}
+      <h2>${Q.q}</h2>${order.map((o, i) => `<button class="opt" data-o="${o}"><i>${i + 1}</i><span>${Q.opts[o]}</span></button>`).join('')}
+      <div class="fb" id="fb"></div><button class="btn" id="qClose">稍後再答</button>`;
+    $('quizCard').querySelectorAll('.opt').forEach(b => b.onclick = () => UI.answer(+b.dataset.o));
+    $('qClose').onclick = () => UI.close('mQuiz');
+    $('mQuiz').classList.add('on');
+  },
+  answer(o) {
+    const s = UI.cur, Q = QUIZ[s.id], ok = o === 0, h = HELPERS.find(x => x.q === s.id);
+    if (!s.quizBusy) {
+      s.quizBusy = true;
+      if (s.first === null) s.first = ok;                          // 計分只看第一次
+      s.state = ok ? 'ok' : 'bad';
+      $('quizCard').querySelectorAll('.opt').forEach(b => { b.disabled = true; const v = +b.dataset.o; if (ok && v === 0) b.classList.add('ok'); else if (!ok && v === o) b.classList.add('bad'); });
+      const fb = $('fb'); fb.className = 'fb ' + (ok ? 'ok' : 'bad');
+      fb.innerHTML = ok ? `✅ <b>答對了！</b>${Q.exp}` : `🤔 <b>差一點！</b>可以去找附近的 💡<b>${h.name}</b>（${h.role}）聽重點，再回來重新作答。`;
+      $('qClose').textContent = '繼續'; s.quizBusy = false; UI.cur = ok ? null : s; s.answeredNow = true;
+      UI.refresh(); MP.onAnswer();
+    }
+  },
+  close(id) {
+    $(id).classList.remove('on');
+    if (id === 'mQuiz' && spots.every(s => s.state === 'ok')) setTimeout(UI.end, 400); // 全部答對
+  },
+  help() {
+    $('helpCard').innerHTML = `<span class="tag" style="background:#f2c230;color:#26262c">💡 HELP</span><h2>提示角色</h2>` +
+      HELPERS.map((h, i) => { const s = stOf(h.q); return `<div class="hcard"><div class="av" style="background:${h.color}">${h.name[0]}</div>
+        <div><b>${h.name}</b> <em>${h.role}</em><small>在「${s.name}」旁邊・負責第 ${h.q} 題 ${s.state === 'ok' ? '✓' : s.state === 'bad' ? '（還沒答對）' : ''}</small>
+        <ul>${h.tips.map(t => `<li>${t}</li>`).join('')}</ul></div><button class="go" data-i="${i}">帶我去</button></div>`; }).join('') +
+      `<button class="btn" id="hClose">關閉</button>`;
+    $('helpCard').querySelectorAll('.go').forEach(b => b.onclick = () => { const h = HELPERS[+b.dataset.i]; moveTo = { x: h.x + 0.9, z: h.z + 0.9 }; UI.close('mHelp'); });
+    $('hClose').onclick = () => UI.close('mHelp');
+    $('mHelp').classList.add('on');
+  },
+  near(h) {                                                      // 下方提示卡
+    const el = $('near'), show = h && !UI.open();
+    el.style.display = show ? 'block' : 'none'; $('tipline').style.display = show ? 'none' : '';
+    if (!show || el.dataset.h === h.name) return;
+    el.dataset.h = h.name;
+    el.innerHTML = `<div class="who"><div class="av" style="background:${h.color}">${h.name[0]}</div><b>${h.name}</b><em>${h.role}</em>
+      <span style="margin-left:auto;font-size:12px;color:#7b7b86">第 ${h.q} 題的提示</span></div><ul>${h.tips.map(t => `<li>${t}</li>`).join('')}</ul>`;
+  },
+  end() {
+    const firstOk = spots.filter(s => s.first === true).length;
+    $('endCard').innerHTML = `<span class="tag">完成！</span><h2>六個題目都答對了 🎉</h2>
+      <div style="font-size:14px;color:#6b6b75">第一次就答對</div><div class="big">${firstOk} / 6</div>` +
+      spots.map(s => `<div class="row"><span>第 ${s.id} 題・${s.name}</span><span>${s.first ? '✅ 一次答對' : '🔁 看提示後答對'}</span></div>`).join('') +
+      `<div class="row" style="border:0;font-weight:700"><span>用時</span><span>${mmss((MP.finishedAt || Date.now()) - MP.startedAt)}</span></div>` +
+      `<div style="font-size:15px;margin-top:8px">🏆 你是第 <b id="myRank">${MP.myRank() || '…'}</b> 位六題全對的人！右上角看排行榜。</div>` +
+      `<button class="btn" id="again">關閉</button>`;
+    $('again').onclick = () => UI.close('mEnd');
+    setTimeout(() => { const el = $('myRank'); if (el && MP.myRank()) el.textContent = MP.myRank(); }, 800);
+    $('mEnd').classList.add('on');
+  },
+};
+$('startBtn').onclick = () => { UI.close('mIntro'); MP.join(); };
+$('helpBtn').onclick = () => UI.help();
+addEventListener('keydown', e => {  
+  if (Chat.typing()) return;                                     // 正在聊天室打字
+  if (e.key === 'Enter' && $('chat').classList.contains('on') && !UI.open()) { e.preventDefault(); $('chatIn').focus(); return; } // Enter 開始打字                             // 鍵盤：1～4 作答、Enter 繼續、H 提示、Esc 關閉
+  if ($('mQuiz').classList.contains('on')) {
+    const n = +e.key; const btns = [...$('quizCard').querySelectorAll('.opt')];
+    if (n >= 1 && n <= 4 && btns[n - 1] && !btns[n - 1].disabled) btns[n - 1].click();
+    if (e.key === 'Enter' || e.key === 'Escape') $('qClose').click();
+    return;
+  }
+  if (e.key === 'Enter' && $('mIntro').classList.contains('on')) $('startBtn').click();
+  if (e.key === 'Escape') ['mHelp', 'mIntro'].forEach(id => UI.close(id));
+  if ((e.key === 'h' || e.key === 'H') && !UI.open()) UI.help();
+});
+UI.refresh();
+
+// ---------------- 多人連線（socket.io） ----------------
+// ===================== 連線設定（學生只需要看這兩行） =====================
+// SERVER_URL：老師提供的伺服器網址，全班都一樣（網頁就放在老師的 NAS 上時留空）
+// ROOM      ：房間名稱。留空 = 自動用自己的 GitHub 帳號；想和別組一起測，就填同一個名稱（英文、數字）
+const SERVER_URL = 'http://cfchen58.synology.me:3002';
+const ROOM = '';
+// ======================================================================
+const LOOKS = [
+  { name: '馬尾女孩', look: { shirt: 0x5fae6e, pants: 0x2f3a5c, hair: 0x2b1d14, helmet: 0xd9483b, bag: C.yellow, ponytail: 0x2b1d14 } },
+  { name: '藍帽男孩', look: { shirt: 0xe8743b, pants: 0x3f4a66, hair: 0x2b1d14, helmet: 0x2f6fb0, bag: 0x5b8def } },
+  { name: '粉紅背包', look: { shirt: 0xf29bb5, pants: 0x4a5370, hair: 0x6b4a2b, bag: 0xf2c230, ponytail: 0x6b4a2b } },
+  { name: '黃帽小隊', look: { shirt: 0x5b8def, pants: 0x3f4a66, hair: 0x2b1d14, helmet: C.yellow, bag: 0x7ab07a } },
+  { name: '紫衣學長', look: { shirt: 0x8e6cc4, pants: 0x2f2f36, hair: 0x1d1d22, bag: 0xe8743b } },
+  { name: '白衣學霸', look: { shirt: 0xf7f4ee, pants: 0x2f6fb0, hair: 0x3b2a20, glasses: true, bag: 0xd9483b } },
+];
+const lookColor = i => hex(LOOKS[i].look.shirt);
+const clampLook = v => Math.max(0, Math.min(LOOKS.length - 1, Math.floor(Number(v)) || 0));
+const num = (v, d = 0) => (typeof v === 'number' && isFinite(v) ? v : d);
+const mmss = ms => { const t = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+function dressPlayer(i) {                                        // 換主角的造型：做一個新公仔，把零件搬過來
+  const c = makeChibi(LOOKS[i].look); scene.remove(c);
+  player.clear(); while (c.children.length) player.add(c.children[0]);
+  player.userData = c.userData;
+}
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.h); toast.h = setTimeout(() => t.style.display = 'none', 3500); }
+
+const MP = {
+  socket: null, myId: null, look: 0, joined: false, startedAt: null, finishedAt: null,
+  others: new Map(), rank: [], sendAt: 0, lastSent: '',
+  teacherKey: new URLSearchParams(location.search).get('teacher'),   // 網址加 ?teacher=密碼 才看得到「開新一局」
+
+  init() {                                                        // 從伺服器載入 socket.io 的程式再連線
+    const sc = document.createElement('script');
+    sc.src = (SERVER_URL || '') + '/socket.io/socket.io.min.js';
+    sc.onload = () => MP.connect();
+    sc.onerror = () => MP.offline();
+    document.head.appendChild(sc);
+    setTimeout(() => { if (!MP.socket || !MP.socket.connected) MP.offline(); }, 6000);
+    if (MP.teacherKey) $('resetBtn').style.display = '';
+  },
+  connect() {
+    const io = window.io;
+    MP.socket = SERVER_URL ? io(SERVER_URL) : io();
+    MP.socket.on('connect', () => { $('mpNote').textContent = '✅ 已連上伺服器，輸入暱稱就可以加入。'; $('online').textContent = '已連線';
+      if (MP.joined) MP.socket.emit('join', { name: MP.name, look: MP.look, room: ROOM || new URLSearchParams(location.search).get('room') || '' }); });   // 斷線重連後重新加入
+    MP.socket.on('disconnect', () => { $('online').textContent = '連線中斷…'; });
+    MP.socket.on('welcome', d => {
+      const first = !MP.myId;
+      MP.myId = d.id; MP.name = String(d.name || MP.name); $('roomName').textContent = String(d.room || '').slice(0, 40);
+      if (first && typeof d.x === 'number' && typeof d.z === 'number') { player.position.set(d.x, 0.06, d.z); moveTo = null; } // 伺服器安排的出生點
+      $('chatLog').textContent = ''; (Array.isArray(d.history) ? d.history : []).forEach(m => Chat.add(m, false));
+      MP.sendProgress();
+    });
+    MP.socket.on('chat', m => Chat.add(m, true));
+    MP.roster = new Map();
+    MP.socket.on('roster', list => { MP.roster = new Map((Array.isArray(list) ? list : []).map(q => [q[0], { id: q[1], name: q[2], look: q[3] }])); });
+    MP.socket.on('p', arr => { if (!Array.isArray(arr)) return; MP.onPlayers(arr.map(q => { const who = MP.roster.get(q[0]) || {}; return { id: who.id, name: who.name, look: who.look, x: q[1], z: q[2], r: q[3], n: q[4], done: !!q[5] }; }).filter(q => q.id)); });
+    MP.socket.on('custom', m => { if (!m || typeof m.type !== 'string') return; (MP.handlers[m.type] || []).forEach(fn => { try { fn(m.data, m.from || {}); } catch (e) { console.error(e); } }); });
+    MP.socket.on('players', list => MP.onPlayers(list));
+    MP.socket.on('rank', list => { MP.rank = Array.isArray(list) ? list : []; MP.renderBoard(); });
+    MP.socket.on('newRound', () => MP.newRound());
+    MP.socket.on('notice', m => toast(String(m).slice(0, 60)));
+  },
+  offline() {
+    if (MP.socket && MP.socket.connected) return;
+    $('mpNote').textContent = '⚠️ 連不上伺服器，可以先單人遊玩（不會出現在排行榜）。';
+    $('online').textContent = '單人模式'; $('boardList').textContent = '沒有連上伺服器';
+  },
+  join() {
+    MP.name = ($('nick').value.trim() || '玩家').slice(0, 12);
+    try { localStorage.setItem('island-nick', MP.name); } catch (e) {}
+    MP.joined = true; dressPlayer(MP.look); $('chat').classList.add('on');
+    MP.startedAt = Date.now(); MP.finishedAt = null;
+    if (MP.socket && MP.socket.connected) MP.socket.emit('join', { name: MP.name, look: MP.look, room: ROOM || new URLSearchParams(location.search).get('room') || '' });
+  },
+  sendProgress() {
+    if (!MP.socket || !MP.joined) return;
+    MP.socket.emit('progress', { n: spots.filter(sp => sp.state === 'ok').length, firstTry: spots.filter(sp => sp.first === true).length });
+  },
+  onAnswer() {
+    if (!MP.finishedAt && spots.every(sp => sp.state === 'ok')) MP.finishedAt = Date.now();
+    MP.sendProgress();
+  },
+  newRound() {                                                    // 老師開新一局
+    spots.forEach(sp => { sp.state = null; sp.first = null; });
+    MP.startedAt = Date.now(); MP.finishedAt = null;
+    player.position.set(0, 0.06, 1); moveTo = null; UI.refresh();
+    ['mQuiz', 'mEnd', 'mHelp'].forEach(id => $(id).classList.remove('on'));
+    toast('老師開了新的一局！重新開始計時');
+  },
+  onPlayers(list) {                                               // 其他玩家：新增、更新、離開
+    if (!Array.isArray(list)) return;
+    const seen = new Set();
+    list.forEach(q => {
+      if (!q || q.id === MP.myId) return;
+      seen.add(q.id);
+      const look = clampLook(q.look);
+      let o = MP.others.get(q.id);
+      if (!o || o.look !== look) {
+        if (o) scene.remove(o.ch);
+        const ch = makeChibi(LOOKS[look].look); ch.position.set(num(q.x), 0.06, num(q.z));
+        o = { ch, look }; MP.others.set(q.id, o);
+      }
+      o.tx = num(q.x); o.tz = num(q.z); o.ry = num(q.r); o.n = Math.min(6, num(q.n)); o.done = !!q.done;
+      o.name = String(q.name || '玩家').slice(0, 12);
+    });
+    MP.others.forEach((o, id) => { if (!seen.has(id)) { scene.remove(o.ch); MP.others.delete(id); } });
+    $('online').textContent = `線上 ${list.length} 人`;
+  },
+  renderBoard() {
+    const list = $('boardList'); list.textContent = '';
+    if (!MP.rank.length) { list.textContent = '還沒有人加入，搶第一名吧！'; return; }
+    MP.rank.forEach((r, i) => {
+      const row = document.createElement('div'); row.className = 'br' + (r.id === MP.myId ? ' me' : '');
+      const rk = document.createElement('span'); rk.className = 'rk' + (r.done && i < 3 ? ' g' : ''); rk.textContent = r.done ? (['🥇', '🥈', '🥉'][i] || i + 1) : '–';
+      const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = lookColor(clampLook(r.look));
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = String(r.name || '玩家').slice(0, 12) + (r.id === MP.myId ? '（你）' : '');
+      const sc = document.createElement('span'); sc.className = 'sc'; sc.textContent = r.done ? `✅ ${mmss(num(r.used))}・一次對 ${num(r.firstTry)}` : `${num(r.n)} / 6 進行中`;
+      row.append(rk, dot, nm, sc); list.append(row);
+    });
+  },
+  myRank() { const r = MP.rank.find(x => x.id === MP.myId && x.done); return r ? r.rank : null; },
+  reset() {
+    if (Date.now() - (MP.resetArm || 0) > 4000) { MP.resetArm = Date.now(); $('resetBtn').classList.add('warn'); $('resetBtn').textContent = '確定開新一局？再按一次';
+      setTimeout(() => { $('resetBtn').classList.remove('warn'); $('resetBtn').textContent = '🔄 開新一局（清空排行榜）'; }, 4000); return; }
+    MP.resetArm = 0; $('resetBtn').classList.remove('warn'); $('resetBtn').textContent = '🔄 開新一局（清空排行榜）';
+    if (MP.socket) MP.socket.emit('reset', MP.teacherKey);
+  },
+  tick(dt) {
+    MP.others.forEach(o => {
+      const dx = o.tx - o.ch.position.x, dz = o.tz - o.ch.position.z, d = Math.hypot(dx, dz);
+      if (d > 8) o.ch.position.set(o.tx, 0.06, o.tz);
+      else { const k = 1 - Math.pow(0.0005, dt); o.ch.position.x += dx * k; o.ch.position.z += dz * k; }
+      let diff = o.ry - o.ch.rotation.y; diff = Math.atan2(Math.sin(diff), Math.cos(diff)); o.ch.rotation.y += diff * Math.min(1, dt * 10);
+      animateWalk(o.ch, d > 0.03 ? 1 : 0, dt);
+      o.ch.userData.armL.rotation.z = o.waveUntil > Date.now() ? -2.5 - Math.sin(Date.now() / 140) * 0.35 : 0; // 別人揮手
+    });
+    if (player.userData.armL) player.userData.armL.rotation.z = MP.myWave > Date.now() ? -2.5 - Math.sin(Date.now() / 140) * 0.35 : 0; // 自己揮手
+    if (MP.socket && MP.socket.connected && MP.joined) {         // 自己的位置：有變化才送，最多每 0.1 秒一次
+      const now = performance.now();
+      const st = { x: Math.round(player.position.x * 100) / 100, z: Math.round(player.position.z * 100) / 100, r: Math.round(player.rotation.y * 100) / 100 };
+      const key = JSON.stringify(st);
+      if (key !== MP.lastSent && now - MP.sendAt > 100) { MP.lastSent = key; MP.sendAt = now; MP.socket.emit('move', st); }
+    }
+    if (MP.joined && MP.startedAt) $('timer').textContent = '用時 ' + mmss((MP.finishedAt || Date.now()) - MP.startedAt);
+  },
+  labels(p, toScreen) {                                           // 其他玩家頭上的名字與對話泡泡
+    const now = Date.now();
+    const bubble = (x, y, text) => {                              // 白色對話框，太長就截短
+      p.textSize(13); p.textStyle(p.NORMAL);
+      let t = text; while (p.textWidth(t) > 220 && t.length > 4) t = t.slice(0, -2);
+      if (t !== text) t += '…';
+      const w = p.textWidth(t) + 20, h = 28, bx = x - w / 2, by = y - h - 10;
+      p.noStroke(); p.fill(0, 0, 0, 30); p.rect(bx + 1, by + 3, w, h, 12);
+      p.fill(255); p.rect(bx, by, w, h, 12); p.triangle(x - 6, by + h - 1, x + 6, by + h - 1, x, by + h + 7);
+      p.fill(38, 38, 44); p.textAlign(p.CENTER, p.CENTER); p.text(t, x, by + h / 2 + 0.5);
+    };
+    MP.others.forEach(o => {
+      const sc = toScreen(o.ch.position.x, 2.3, o.ch.position.z);
+      const label = o.name + (o.done ? ' 🏁' : ` ${o.n}/6`);
+      p.textSize(12); p.textStyle(p.BOLD);
+      const w = p.textWidth(label) + 26;
+      p.noStroke(); p.fill(38, 38, 44, 200); p.rect(sc.x - w / 2, sc.y - 22, w, 22, 11);
+      p.fill(lookColor(o.look)); p.circle(sc.x - w / 2 + 11, sc.y - 11, 10);
+      p.fill(255); p.textAlign(p.LEFT, p.CENTER); p.text(label, sc.x - w / 2 + 19, sc.y - 10.5);
+      if (o.say && now < o.sayUntil) bubble(sc.x, sc.y - 24, o.say);
+    });
+    if (MP.mySay && now < MP.mySayUntil) { const sc = toScreen(player.position.x, 2.1, player.position.z); bubble(sc.x, sc.y, MP.mySay); }
+  },
+};
+// 選角色按鈕
+$('looks').innerHTML = LOOKS.map((L, i) => `<button class="lk${i === 0 ? ' on' : ''}" data-i="${i}"><i style="background:${lookColor(i)}"></i>${L.name}</button>`).join('');
+$('looks').querySelectorAll('.lk').forEach(bt => bt.onclick = () => {
+  MP.look = +bt.dataset.i; $('looks').querySelectorAll('.lk').forEach(x => x.classList.toggle('on', x === bt)); dressPlayer(MP.look);
+});
+$('boardHead').onclick = () => { const b = $('board'); if (innerWidth <= 800) b.classList.toggle('open'); else b.classList.toggle('min'); };
+$('resetBtn').onclick = () => MP.reset();
+try { $('nick').value = localStorage.getItem('island-nick') || ''; } catch (e) {}
+const Chat = {
+  add(m, live) {                                                  // 加一則訊息到聊天紀錄
+    if (!m || typeof m.text !== 'string') return;
+    const log = $('chatLog'), row = document.createElement('div');
+    if (m.sys) { row.className = 'cm sys'; row.textContent = m.text.slice(0, 120); if (live) toast(m.text.slice(0, 60)); }
+    else {
+      row.className = 'cm' + (m.id === MP.myId ? ' me' : '');
+      const who = document.createElement('b'); who.textContent = String(m.name || '玩家').slice(0, 12) + '：';
+      who.style.color = m.id === MP.myId ? '' : lookColor(clampLook(m.look));
+      row.append(who, document.createTextNode(m.text.slice(0, 80)));
+      if (live) {                                                 // 說話的人頭上冒泡泡 5 秒
+        if (m.id === MP.myId) { MP.mySay = m.text; MP.mySayUntil = Date.now() + 5000; }
+        else { const o = MP.others.get(m.id); if (o) { o.say = m.text; o.sayUntil = Date.now() + 5000; } }
+        if ($('chat').classList.contains('min')) $('chatHint').textContent = '有新訊息';
+      }
+    }
+    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 30;
+    log.append(row); while (log.children.length > 80) log.firstChild.remove();
+    if (atBottom || !live || m.id === MP.myId) log.scrollTop = log.scrollHeight;
+  },
+  typing: () => document.activeElement === $('chatIn'),
+};
+$('chatForm').onsubmit = e => {
+  e.preventDefault();
+  const t = $('chatIn').value.trim();
+  if (t && MP.socket && MP.socket.connected && MP.joined) MP.socket.emit('chat', t);
+  else if (t && !(MP.socket && MP.socket.connected)) toast('沒有連上伺服器，訊息送不出去');
+  $('chatIn').value = '';
+};
+$('chatIn').addEventListener('keydown', e => { if (e.key === 'Escape') $('chatIn').blur(); e.stopPropagation(); });
+$('chatHead').onclick = () => { $('chat').classList.toggle('min'); $('chatHint').textContent = 'Enter 開始打字'; };
+// ===================== 學生可以用的「自訂多人訊息」 =====================
+// 老師的伺服器不用改，就能做新的多人功能：
+//   送出：MP.send('種類', 資料)            → 同房間的其他人都會收到（資料最多 2 KB，每秒最多 20 則）
+//   接收：MP.on('種類', (資料, 送的人) => { ... })   送的人 = { id, name }
+// 下面的「揮手」就是範例：按 G 或 👋，自己和別人畫面上的你都會揮手
+MP.handlers = {};
+MP.send = (type, data) => { if (MP.socket && MP.socket.connected && MP.joined) MP.socket.emit('custom', { type, data }); };
+MP.on = (type, fn) => { (MP.handlers[type] = MP.handlers[type] || []).push(fn); };
+
+MP.wave = () => { MP.myWave = Date.now() + 2000; MP.send('wave', {}); };
+MP.on('wave', (data, from) => { const o = MP.others.get(from.id); if (o) o.waveUntil = Date.now() + 2000; });
+$('waveBtn').onclick = () => MP.wave();
+addEventListener('keydown', e => { if ((e.key === 'g' || e.key === 'G') && !Chat.typing() && !UI.open() && MP.joined) MP.wave(); });
+// ======================================================================
+MP.init();
+
+// ---------------- 狀態 ----------------
+const target = new THREE.Vector3(0, 0, 1);                       // 攝影機跟隨的點
+let moveTo = null;                                               // 點擊後要走去的位置
+let nearSpot = null;                                             // 目前站在哪個集章點旁
+let celebrate = 0;                                               // 全部集滿後的慶祝時間
+const SCREEN_RIGHT = new THREE.Vector3(), SCREEN_UP = new THREE.Vector3(); // 畫面的右、上在世界中的方向（跟著視角變）
+
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); fitCamera(); }); // 視窗改變時重新調整
+
+// =====================================================================
+// p5.js：主迴圈、輸入、介面
+// =====================================================================
+new p5((p) => {
+  const FONT = "'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif"; // 中文字型與備用字型
+  const labelHits = [];                                          // 這一幀畫出的標籤位置（點擊判斷用）
+  const ray = new THREE.Raycaster();                             // 用來把滑鼠位置換算到地面
+  const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.06); // 地面平面
+
+  p.setup = () => {
+    p.createCanvas(p.windowWidth, p.windowHeight).parent('hud'); // 介面畫布
+    p.textFont(FONT);                                            // 套用字型
+  };
+  p.windowResized = () => p.resizeCanvas(p.windowWidth, p.windowHeight);
+
+  // 把 3D 座標換算成螢幕座標
+  const toScreen = (x, y, z) => {
+    const v = new THREE.Vector3(x, y, z).project(camera);        // 投影到 -1～1
+    return { x: (v.x + 1) / 2 * p.width, y: (1 - v.y) / 2 * p.height };
+  };
+
+  // 點擊或觸控：點標籤就走過去，點地面就走到那裡
+  let downX = 0, downY = 0, dragging = false;                    // 拖曳狀態
+  const onUI = e => UI.open() || (e && e.target && e.target.closest && e.target.closest('.ui'));
+  let skip = false;
+  p.mousePressed = (e) => { skip = onUI(e); downX = p.mouseX; downY = p.mouseY; dragging = false; if (!skip) return false; };
+  p.mouseDragged = () => {                                       // 按住拖曳：旋轉攝影機
+    if (skip) return;
+    if (Math.hypot(p.mouseX - downX, p.mouseY - downY) > 5) dragging = true; // 移動超過 5 像素才算拖曳
+    if (!dragging) return false;
+    yawTarget -= (p.mouseX - p.pmouseX) * 0.008;                 // 左右拖：水平旋轉
+    pitchTarget = p.constrain(pitchTarget + (p.mouseY - p.pmouseY) * 0.006, PITCH_MIN, PITCH_MAX); // 上下拖：俯角
+    return false;
+  };
+  p.mouseReleased = () => {                                      // 放開時，沒有拖曳才算「點一下」
+    if (skip) { skip = false; return; }
+    if (dragging) { dragging = false; return false; }
+    const hit = labelHits.find(h => p.mouseX > h.x && p.mouseX < h.x + h.w && p.mouseY > h.y && p.mouseY < h.y + h.h);
+    if (hit) { moveTo = hit.spot ? { x: hit.spot.x, z: hit.spot.z } : { x: hit.helper.x + 0.9, z: hit.helper.z + 0.9 }; return false; } // 點到標籤
+    ray.setFromCamera(new THREE.Vector2(p.mouseX / p.width * 2 - 1, -(p.mouseY / p.height) * 2 + 1), camera); // 滑鼠射線
+    const pt = new THREE.Vector3();
+    if (ray.ray.intersectPlane(groundPlane, pt) && walkable(pt.x, pt.z)) moveTo = { x: pt.x, z: pt.z }; // 點到可走的地面
+    return false;                                                // 避免手機捲動
+  };
+  // 滾輪縮放
+  p.mouseWheel = (e) => { if (onUI(e)) return; zoomTarget = p.constrain(zoomTarget + e.delta * 0.02, 8, 44); return false; }; // 滾輪：設定目標，畫面再慢慢縮放
+  p.keyPressed = () => {
+    if (Chat.typing()) return;                                   // 打字時不處理遊戲按鍵
+    if (UI.open()) return;
+    if (p.key === 'q' || p.key === 'Q') yawTarget -= Math.PI / 2;       // Q：場景往一邊轉 90 度
+    if (p.key === 'e' || p.key === 'E') yawTarget += Math.PI / 2;       // E：往另一邊轉 90 度
+    if (p.key === 'r' || p.key === 'R') {                               // R：回到預設
+      yawTarget = YAW0 + Math.round((camYaw - YAW0) / (Math.PI * 2)) * Math.PI * 2; // 走最近的方向轉回去
+      pitchTarget = PITCH0; zoomTarget = 26;
+    }
+    if ([32, 37, 38, 39, 40].includes(p.keyCode)) return false;  // 方向鍵不捲動網頁
+  };
+
+  // 嘗試移動，撞到東西就沿著牆滑過去
+  function tryMove(ch, dx, dz) {
+    const x = ch.position.x, z = ch.position.z;
+    if (isFree(x + dx, z + dz)) { ch.position.x += dx; ch.position.z += dz; return true; } // 直接走
+    if (isFree(x + dx, z)) { ch.position.x += dx; return true; } // 只走 x
+    if (isFree(x, z + dz)) { ch.position.z += dz; return true; } // 只走 z
+    return false;                                                // 完全卡住
+  }
+
+  function update(dt, t) {
+    // ---- 玩家移動 ----
+    let kx = 0, ky = 0;                                          // 鍵盤方向（畫面上的左右上下）
+    if (p.keyIsDown(p.LEFT_ARROW) || p.keyIsDown(65)) kx -= 1;   // ← / A
+    if (p.keyIsDown(p.RIGHT_ARROW) || p.keyIsDown(68)) kx += 1;  // → / D
+    if (p.keyIsDown(p.UP_ARROW) || p.keyIsDown(87)) ky += 1;     // ↑ / W
+    if (p.keyIsDown(p.DOWN_ARROW) || p.keyIsDown(83)) ky -= 1;   // ↓ / S
+    if (!Chat.typing() && (p.keyIsDown(187) || p.keyIsDown(107) || p.keyIsDown(61))) zoomTarget = Math.max(8, zoomTarget - 18 * dt);  // + 鍵拉近
+    if (!Chat.typing() && (p.keyIsDown(189) || p.keyIsDown(109) || p.keyIsDown(173))) zoomTarget = Math.min(44, zoomTarget + 18 * dt); // - 鍵拉遠
+    SCREEN_RIGHT.set(Math.cos(camYaw), 0, -Math.sin(camYaw));    // 依目前視角算出畫面的右邊
+    SCREEN_UP.set(-Math.sin(camYaw), 0, -Math.cos(camYaw));      // 畫面的上方
+    if (UI.open() || Chat.typing()) { kx = ky = 0; if (UI.open()) moveTo = null; }               // 作答或看提示時先停下來
+    let mx = 0, mz = 0;                                          // 世界中的移動方向
+    if (kx || ky) {                                              // 有按鍵就用鍵盤
+      moveTo = null;                                             // 取消點擊目標
+      mx = SCREEN_RIGHT.x * kx + SCREEN_UP.x * ky;               // 換算成世界方向
+      mz = SCREEN_RIGHT.z * kx + SCREEN_UP.z * ky;
+    } else if (moveTo) {                                         // 沒按鍵就走向點擊的位置
+      mx = moveTo.x - player.position.x; mz = moveTo.z - player.position.z;
+      if (Math.hypot(mx, mz) < 0.15) { moveTo = null; mx = mz = 0; } // 到了
+    }
+    const len = Math.hypot(mx, mz);
+    if (len > 0) {                                               // 正在移動
+      const step = 5 * dt;                                       // 每秒 5 單位
+      const ok = tryMove(player, mx / len * step, mz / len * step);
+      if (!ok) moveTo = null;                                    // 卡住就停下
+      faceTo(player, mx, mz);                                    // 轉向
+      animateWalk(player, 1, dt);                                // 走路動畫
+    } else animateWalk(player, 0, dt);                           // 站好
+    playerRing.position.set(player.position.x, 0.1, player.position.z); // 圓圈跟著玩家
+
+    // ---- 小狗：走到主角後方 1.5 格的位置 ----
+    const back = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y)); // 主角面向的方向
+    const gx = player.position.x - back.x * 1.5, gz = player.position.z - back.z * 1.5; // 目標點
+    const ddx = gx - dog.position.x, ddz = gz - dog.position.z, dd = Math.hypot(ddx, ddz);
+    const du = dog.userData;
+    if (dd > 0.25) {                                             // 離目標還有距離就跟上
+      const sp = Math.min(6, 2 + dd * 3) * dt;                   // 越遠跑越快
+      tryMove(dog, ddx / dd * Math.min(sp, dd), ddz / dd * Math.min(sp, dd)); // 一樣不能掉進水裡
+      faceTo(dog, ddx, ddz);
+      du.phase += dt * 14;
+    }
+    const run = dd > 0.25 ? 1 : 0;
+    du.legs.forEach((l, i) => l.rotation.x = Math.sin(du.phase + (i % 3 ? Math.PI : 0)) * 0.6 * run); // 對角的腳一起擺
+    du.tail.rotation.y = Math.sin(t * (run ? 18 : 9)) * 0.6;     // 尾巴搖
+    // ---- 老師揮手 ----
+    teacher.userData.armL.rotation.z = -2.5 - Math.sin(t * 7) * 0.35; // 右手舉高左右揮
+    // ---- 路人 ----
+    walkers.forEach(w => {
+      const [tx, tz] = w.path[w.i];                              // 下一個路線點
+      const dx = tx - w.ch.position.x, dz = tz - w.ch.position.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 0.1) { w.i = (w.i + 1) % w.path.length; return; }  // 到了就換下一點
+      w.ch.position.x += dx / d * w.speed * dt; w.ch.position.z += dz / d * w.speed * dt; // 前進
+      faceTo(w.ch, dx, dz); animateWalk(w.ch, w.speed / 2, dt);  // 轉向與擺手腳
+    });
+
+    // ---- 騎士 ----
+    const [cx, cz] = cyclePath[cycleIdx];
+    const cdx = cx - cyclist.position.x, cdz = cz - cyclist.position.z, cd = Math.hypot(cdx, cdz);
+    if (cd < 0.1) cycleIdx = (cycleIdx + 1) % cyclePath.length;  // 到轉角換方向
+    else {
+      cyclist.position.x += cdx / cd * 3 * dt; cyclist.position.z += cdz / cd * 3 * dt; // 每秒 3 單位
+      const want = Math.atan2(cdx, cdz);                         // 想要的方向
+      let diff = want - cyclist.rotation.y; diff = Math.atan2(Math.sin(diff), Math.cos(diff)); // 角度差
+      cyclist.rotation.y += diff * Math.min(1, dt * 6);          // 平滑轉彎
+    }
+    const pedal = t * 8;                                         // 踩踏板節奏
+    rider.userData.legL.rotation.x = -0.9 + Math.sin(pedal) * 0.5; // 左腳踩
+    rider.userData.legR.rotation.x = -0.9 - Math.sin(pedal) * 0.5; // 右腳踩
+
+    // ---- 集章 ----
+    spots.forEach(s => {
+      const inside = Math.hypot(s.x - player.position.x, s.z - player.position.z) < 1.3; // 站在圓圈裡
+      if (inside && !s.wasIn && s.state !== 'ok' && !UI.open()) UI.quiz(s); // 剛走進來、還沒答對 → 出題
+      s.wasIn = inside;                                          // 要先走出去，才會再出題
+      s.ring.scale.setScalar(s.state === 'ok' ? 1 : 1 + Math.sin(t * 3 + s.id) * 0.08); // 還沒答對的圓圈會呼吸
+    });
+    // ---- 提示角色：靠近就轉過來揮手，下方出現提示卡 ----
+    let nearH = null;
+    HELPERS.forEach(h => {
+      const dx = player.position.x - h.x, dz = player.position.z - h.z, d = Math.hypot(dx, dz);
+      if (d < 2.4) { nearH = h; h.ch.rotation.y += (Math.atan2(dx, dz) - h.ch.rotation.y) * Math.min(1, dt * 6); }
+      if (!h.teacher) h.ch.userData.armL.rotation.z = d < 2.4 ? -2.5 - Math.sin(t * 7) * 0.35 : 0; // 靠近才揮手
+    });
+    UI.near(nearH);
+    MP.tick(dt);
+
+    // ---- 環境動畫 ----
+    flag.rotation.y = Math.sin(t * 2) * 0.25;                    // 旗子飄動
+    boats.forEach((b, i) => { b.position.y = -1 + Math.sin(t * 1.5 + i) * 0.06; b.rotation.z = Math.sin(t + i) * 0.04; }); // 船搖晃
+    ripples.forEach(r => { r.position.x += dt * 0.4; if (r.position.x > 45) r.position.x = -45; r.scale.x = 0.7 + 0.3 * Math.sin(t + r.userData.phase); }); // 波紋漂動
+
+    // ---- 攝影機跟隨 ----
+    target.lerp(new THREE.Vector3(player.position.x, 0, player.position.z), 1 - Math.pow(0.02, dt)); // 平滑跟隨
+    const k = 1 - Math.pow(0.004, dt);                           // 平滑程度
+    camYaw += (yawTarget - camYaw) * k; camPitch += (pitchTarget - camPitch) * k; // 角度慢慢靠近目標
+    viewSize += (zoomTarget - viewSize) * k; fitCamera();        // 縮放也慢慢靠近
+    camera.position.set(target.x + CAM_DIST * Math.cos(camPitch) * Math.sin(camYaw), CAM_DIST * Math.sin(camPitch),
+                        target.z + CAM_DIST * Math.cos(camPitch) * Math.cos(camYaw)); // 依角度放攝影機
+    camera.lookAt(target);                                       // 看向玩家
+    sun.position.copy(target).add(new THREE.Vector3(12, 25, 8)); // 陰影範圍跟著玩家
+    sun.target.position.copy(target);
+  }
+
+  // ---------------- 介面 ----------------
+  function pill(x, y, label, num, done) {                        // 白色膠囊標籤：①名稱
+    p.textSize(14); p.textStyle(p.BOLD);
+    const w = p.textWidth(label) + 46, h = 30;                   // 標籤寬高
+    const lx = x - w / 2, ly = y - h;                            // 左上角
+    p.noStroke(); p.fill(0, 0, 0, 40); p.rect(lx + 1, ly + 3, w, h, 15); // 陰影
+    p.fill(255); p.rect(lx, ly, w, h, 15);                       // 白底
+    p.fill(done === 'ok' ? '#5fae6e' : done === 'bad' ? '#d9483b' : hex(C.orange)); p.circle(lx + 16, ly + 15, 22); // 編號圓
+    p.fill(255); p.textAlign(p.CENTER, p.CENTER); p.text(done === 'ok' ? '✓' : done === 'bad' ? '✗' : num, lx + 16, ly + 15.5);
+    p.fill('#33333a'); p.textAlign(p.LEFT, p.CENTER); p.text(label, lx + 32, ly + 15.5); // 名稱
+    p.stroke(255); p.strokeWeight(2); p.line(x, y, x, y + 14); p.noStroke(); // 往下指的細線
+    return { x: lx, y: ly, w, h };
+  }
+  function areaTag(x, y, no, name) {                             // 深色區域標籤：03 交通
+    p.textSize(14); p.textStyle(p.BOLD);
+    const w = p.textWidth(name) + 54, h = 34;
+    p.noStroke(); p.fill('#26262c'); p.rect(x - w / 2, y - h / 2, w, h, 17); // 深色底
+    p.fill(hex(C.orange)); p.textAlign(p.LEFT, p.CENTER); p.textSize(11); p.text(no, x - w / 2 + 14, y + 1); // 編號
+    p.fill(255); p.textSize(14); p.text(name, x - w / 2 + 36, y + 1); // 名稱
+  }
+
+  function drawHUD(t) {
+    p.clear();                                                   // 清除（保持透明）
+    labelHits.length = 0;
+    platforms.forEach(pl => { const s = toScreen(pl.x + pl.w / 2 - 2, 0, pl.z + pl.d / 2); areaTag(s.x, s.y + 22, pl.no, pl.name); }); // 區域標籤
+    spots.forEach(s => {                                         // 集章點標籤
+      const sc = toScreen(s.x, 2.4, s.z);
+      const r = pill(sc.x, sc.y + Math.sin(t * 2 + s.id) * 3, `第${s.id}題 ${s.name}`, String(s.id), s.state);
+      labelHits.push({ ...r, spot: s });
+    });
+    HELPERS.forEach((h, i) => {                                  // 提示角色頭上的黃色「?」標籤
+      const sc = toScreen(h.x, 2.5, h.z), y = sc.y + Math.sin(t * 3 + i) * 3;
+      p.textSize(13); p.textStyle(p.BOLD);
+      const w = p.textWidth(h.name) + 42, lx = sc.x - w / 2, ly = y - 28;
+      p.noStroke(); p.fill(0, 0, 0, 40); p.rect(lx + 1, ly + 3, w, 28, 14);
+      p.fill('#f2c230'); p.rect(lx, ly, w, 28, 14);
+      p.fill('#26262c'); p.circle(lx + 15, ly + 14, 20); p.fill('#f2c230'); p.textAlign(p.CENTER, p.CENTER); p.text('?', lx + 15, ly + 14.5);
+      p.fill('#26262c'); p.textAlign(p.LEFT, p.CENTER); p.text(h.name, lx + 30, ly + 14.5);
+      p.fill('#f2c230'); p.triangle(sc.x - 6, ly + 27, sc.x + 6, ly + 27, sc.x, ly + 35);
+      labelHits.push({ x: lx, y: ly, w, h: 28, helper: h });
+    });
+    MP.labels(p, toScreen);
+
+  }
+
+  p.draw = () => {
+    const dt = Math.min(p.deltaTime / 1000, 0.05);               // 這一幀經過的秒數
+    const t = p.millis() / 1000;                                 // 總時間
+    update(dt, t);                                               // 更新遊戲
+    renderer.render(scene, camera);                              // 畫 3D 場景
+    drawHUD(t);                                                  // 畫介面
+  };
+});
+</script>
+
+</body>
+</html>
